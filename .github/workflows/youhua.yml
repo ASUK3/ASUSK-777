@@ -55,7 +55,7 @@ jobs:
 
          - name: 更新订阅源
       run: cd openwrt && ./scripts/feeds update -a
-
+      
     - name: 安装订阅源
       run: cd openwrt && ./scripts/feeds install -a
 
