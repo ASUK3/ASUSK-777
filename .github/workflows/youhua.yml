@@ -24,7 +24,7 @@ jobs:
 
     steps:
     - name: 🛠️ 代码仓库检查
-      uses: actions/checkout@v3
+      uses: actions/checkout@main
 
     - name: 🔧 环境初始化
       env:
