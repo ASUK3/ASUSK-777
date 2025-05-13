@@ -47,13 +47,17 @@ jobs:
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     - name: 📦 软件源配置
-      run: |
+     run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
         chmod +x $DIY_P1_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+
+         - name: 更新订阅源
+      run: cd openwrt && ./scripts/feeds update -a
+
+    - name: 安装订阅源
+      run: cd openwrt && ./scripts/feeds install -a
 
     - name: ⚙️ 编译配置生成
       run: |
