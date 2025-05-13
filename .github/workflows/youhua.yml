@@ -100,13 +100,14 @@ jobs:
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: 📤 编译成果上传
-      uses: actions/upload-artifact@v3
-      if: success()
+      uses: softprops/action-gh-release@v1
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: 编译成果_${{ env.DEVICE_NAME }}_${{ env.FILE_DATE }}
-        path: |
-          openwrt/bin/targets/*/*/*
-          !openwrt/bin/targets/*/*/packages
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        files: ${{ env.FIRMWARE }}/*
 
     - name: 🗑️ 历史记录清理
       if: always()
@@ -116,8 +117,14 @@ jobs:
         keep_minimum_runs: 3
 
     - name: 🗃️ 旧版本清理
-      if: success()
+      uses: GitRML/delete-workflow-runs@main
+      with:
+        retain_days: 1
+        keep_minimum_runs: 3
+
+    - name: Remove old Releases
       uses: dev-drprasad/delete-older-releases@v0.1.0
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
         keep_latest: 3
         delete_tags: true
