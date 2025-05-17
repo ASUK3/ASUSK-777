@@ -74,6 +74,8 @@ echo 'net.ipv4.udp_mem = 65536 131072 262144' >>package/base-files/files/etc/sys
 echo 'net.ipv4.ipfrag_high_thresh = 8388608' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.ipfrag_low_thresh = 3145728' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.ipfrag_secret_interval = 18' >>package/base-files/files/etc/sysctl.conf
+echo 'net.core.default_qdisc = fq' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_congestion_control = bbr' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 
 # 替换源 
