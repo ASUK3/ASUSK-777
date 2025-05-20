@@ -10,3 +10,6 @@
 # Description: OpenWrt DIY script part 2 (After Update feeds)
 #
 
+#添加计划任务
+echo '0 2 * * * rm -rf /var/log/*' >>package/base-files/files/etc/crontabs/root
+echo '*/30 * * * * /etc/init.d/dnsmasq restart' >>package/base-files/files/etc/crontabs/root
