@@ -78,6 +78,10 @@ echo 'net.core.default_qdisc = fq' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_congestion_control = bbr' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 
+#添加计划任务
+echo "0 2 * * * rm -rf /var/log/*" >> files/etc/crontabs/root
+echo "*/30 * * * * /etc/init.d/dnsmasq restart" >> files/etc/crontabs/root
+
 # 替换源 
 # sed -i 's,mirrors.vsean.net/openwrt,mirrors.pku.edu.cn/immortalwrt,g'  package/emortal/default-settings/files/99-default-settings-chinese
 
