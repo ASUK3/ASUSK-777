@@ -9,7 +9,3 @@
 # File name: diy-part2.sh
 # Description: OpenWrt DIY script part 2 (After Update feeds)
 #
-
-#添加计划任务
-echo '0 2 * * * rm -rf /var/log/*' >> files/etc/crontabs/root
-echo '*/30 * * * * /etc/init.d/dnsmasq restart' >> files/etc/crontabs/root
