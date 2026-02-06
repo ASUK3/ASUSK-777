@@ -13,7 +13,7 @@ env:
   REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x
   REPO_BRANCH: openwrt-21.02
   FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: .config(360)
+  CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   UPLOAD_BIN_DIR: false
@@ -35,6 +35,7 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
+        set -eux
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-2004)
@@ -47,30 +48,38 @@ jobs:
     - name: 克隆源代码
       working-directory: /workdir
       run: |
+        set -eux
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     - name: 加载自定义提要
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
+        set -eux
+        [ -e "$FEEDS_CONF" ] && mv "$FEEDS_CONF" openwrt/feeds.conf.default
+        chmod +x "$DIY_P1_SH"
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        "$GITHUB_WORKSPACE/$DIY_P1_SH"
 
     - name: 更新订阅源
-      run: cd openwrt && ./scripts/feeds update -a
+      run: |
+        set -eux
+        cd openwrt && ./scripts/feeds update -a
 
     - name: 安装订阅源
-      run: cd openwrt && ./scripts/feeds install -a
+      run: |
+        set -eux
+        cd openwrt && ./scripts/feeds install -a
 
     - name: 加载自定义配置
       run: |
+        set -eux
         [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
+        # CONFIG_FILE 名称包含括号时，务必加引号
+        [ -e "$CONFIG_FILE" ] && mv "$CONFIG_FILE" openwrt/.config
+        chmod +x "$DIY_P2_SH"
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        "$GITHUB_WORKSPACE/$DIY_P2_SH"
 
     - name: SSH 连接 Actions
       uses: P3TERX/ssh2actions@v1.0.0
@@ -82,20 +91,34 @@ jobs:
     - name: 下载依赖包
       id: package
       run: |
+        set -eux
         cd openwrt
         make defconfig
         make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        find dl -size -1024c -exec ls -l {} \; || true
+        find dl -size -1024c -exec rm -f {} \; || true
 
     - name: 编译固件
       id: compile
       run: |
+        set -eux
         cd openwrt
         echo -e "$(nproc) 线程编译"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+
+        # 任意一次成功就继续，否则直接失败退出
+        if make -j"$(nproc)"; then
+          echo "build ok (parallel)"
+        elif make -j1; then
+          echo "build ok (single)"
+        elif make -j1 V=s; then
+          echo "build ok (single, verbose)"
+        else
+          echo "ERROR: build failed."
+          exit 1
+        fi
+
         echo "::set-output name=status::success"
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME || true
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
@@ -112,10 +135,25 @@ jobs:
 
     - name: 整理文件
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
       run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
+        set -eux
+
+        # 自动寻找固件输出目录（避免硬编码 cd openwrt/bin/targets/*/* 失败）
+        FIRMWARE_DIR="$(find openwrt -type d -path 'openwrt/bin/targets/*/*' | head -n 1 || true)"
+
+        if [ -z "${FIRMWARE_DIR}" ]; then
+          echo "ERROR: openwrt/bin/targets/*/* not found."
+          echo "Possible reasons: build failed OR output path differs."
+          echo "=== Debug: list openwrt/bin (if exists) ==="
+          ls -la openwrt || true
+          ls -la openwrt/bin || true
+          find openwrt -maxdepth 4 -type d -print | head -n 200 || true
+          exit 1
+        fi
+
+        cd "${FIRMWARE_DIR}"
+        rm -rf packages || true
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "::set-output name=status::success"
 
@@ -130,8 +168,9 @@ jobs:
       id: cowtransfer
       if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
       run: |
+        set -eux
         curl -fsSL git.io/file-transfer | sh
-        ./transfer cow --block 2621440 -s -p 64 --no-progress ${FIRMWARE} 2>&1 | tee cowtransfer.log
+        ./transfer cow --block 2621440 -s -p 64 --no-progress "${FIRMWARE}" 2>&1 | tee cowtransfer.log
         echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
         echo "::set-output name=url::$(cat cowtransfer.log | grep https | cut -f3 -d" ")"
 
@@ -139,8 +178,9 @@ jobs:
       id: wetransfer
       if: steps.organize.outputs.status == 'success' && env.UPLOAD_WETRANSFER == 'true' && !cancelled()
       run: |
+        set -eux
         curl -fsSL git.io/file-transfer | sh
-        ./transfer wet -s -p 16 --no-progress ${FIRMWARE} 2>&1 | tee wetransfer.log
+        ./transfer wet -s -p 16 --no-progress "${FIRMWARE}" 2>&1 | tee wetransfer.log
         echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
         echo "::set-output name=url::$(cat wetransfer.log | grep https | cut -f3 -d" ")"
 
@@ -148,10 +188,11 @@ jobs:
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
+        set -eux
         echo "::set-output name=release_tag::$(date +"%Y.%m.%d-%H%M")"
         touch release.txt
-        [ $UPLOAD_COWTRANSFER = true ] && echo "🔗 [奶牛快传](${{ steps.cowtransfer.outputs.url }})" >> release.txt
-        [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
+        [ "$UPLOAD_COWTRANSFER" = true ] && echo "🔗 [奶牛快传](${{ steps.cowtransfer.outputs.url }})" >> release.txt
+        [ "$UPLOAD_WETRANSFER" = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
         echo "::set-output name=status::success"
 
     - name: 上传固件到发布页面
