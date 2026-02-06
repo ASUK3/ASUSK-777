@@ -334,3 +334,20 @@ CONFIG_first_card_name="MT7981"
 # CONFIG_PACKAGE_zram-swap is not set
 # CONFIG_PROCD_ZRAM_TMPFS is not set
 # CONFIG_PACKAGE_kmod-quickstart is not set
+
+# ==== LuCI 基础中文（修复 TurboACC 设置页不显示中文，必须） ====
+CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+
+# ==== 瘦身：去除 Traffic_Status 插件 ====
+# 主流包名
+# CONFIG_PACKAGE_luci-app-trafficstatus is not set
+# CONFIG_PACKAGE_luci-i18n-trafficstatus-zh-cn is not set
+
+# 兼容：下划线命名
+# CONFIG_PACKAGE_luci-app-traffic_status is not set
+# CONFIG_PACKAGE_luci-i18n-traffic_status-zh-cn is not set
+
+# 兼容：中划线命名（少见，但保险）
+# CONFIG_PACKAGE_luci-app-traffic-status is not set
+# CONFIG_PACKAGE_luci-i18n-traffic-status-zh-cn is not set
+
