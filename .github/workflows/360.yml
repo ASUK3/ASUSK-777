@@ -16,11 +16,11 @@ env:
   CONFIG_FILE: .config.360
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
-  UPLOAD_COWTRANSFER: false
-  UPLOAD_WETRANSFER: false
-  UPLOAD_RELEASE: true
+  UPLOAD_BIN_DIR: 'false'
+  UPLOAD_FIRMWARE: 'true'
+  UPLOAD_COWTRANSFER: 'false'
+  UPLOAD_WETRANSFER: 'false'
+  UPLOAD_RELEASE: 'true'
   TZ: Asia/Shanghai
 
 jobs:
@@ -36,24 +36,23 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         set -eux
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-2004)
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+        sudo chown "$USER":"$GROUPS" /workdir
 
     - name: 克隆源代码
       working-directory: /workdir
       run: |
         set -eux
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        df -hT "$PWD"
+        git clone "$REPO_URL" -b "$REPO_BRANCH" openwrt
+        ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
-    # （可留可不留）尝试把 ssh submodule 强制走 https
     - name: Git 全局改用 HTTPS（避免 git@github.com 需要私钥）
       run: |
         set -eux
@@ -69,7 +68,6 @@ jobs:
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P1_SH"
 
-    # ✅ 关键修复：直接禁用 modemfeed（否则它的 SSH 子模块会让 feeds update 失败）
     - name: 禁用 modemfeed（避免 SSH 子模块报错）
       run: |
         set -eux
@@ -125,7 +123,7 @@ jobs:
         echo -e "$(nproc) 线程编译"
         export MAKEFLAGS="-j$(nproc)"
 
-        # 任意一次成功就继续，否则直接失败退出（避免后续找不到 bin/targets）
+        # 任意一次成功就继续，否则直接失败退出
         if make world; then
           echo "build ok (world, parallel)"
         elif make -j2 world; then
@@ -139,10 +137,15 @@ jobs:
           exit 1
         fi
 
-        echo "::set-output name=status::success"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+        # 取设备名（可选）
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME || true
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        if [ -s DEVICE_NAME ]; then
+          echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
+        fi
+
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> "$GITHUB_ENV"
 
     - name: 检查空间使用情况
       if: (!cancelled())
@@ -155,23 +158,49 @@ jobs:
         name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: openwrt/bin
 
-    - name: 整理文件
+    - name: 整理文件（修复 targets 目录匹配）
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
       run: |
         set -eux
-        FIRMWARE_DIR="$(find openwrt -type d -path 'openwrt/bin/targets/*/*' | head -n 1 || true)"
-        if [ -z "${FIRMWARE_DIR}" ]; then
-          echo "ERROR: openwrt/bin/targets/*/* not found."
-          ls -la openwrt || true
-          ls -la openwrt/bin || true
+
+        TARGETS_DIR="openwrt/bin/targets"
+        echo "==== DEBUG: openwrt/bin 内容 ===="
+        ls -la openwrt/bin || true
+
+        if [ ! -d "$TARGETS_DIR" ]; then
+          echo "ERROR: $TARGETS_DIR not found."
           find openwrt -maxdepth 4 -type d -print | head -n 200 || true
           exit 1
         fi
+
+        echo "==== DEBUG: targets 目录结构 ===="
+        ls -la "$TARGETS_DIR" || true
+        find "$TARGETS_DIR" -maxdepth 3 -type d -print || true
+        echo "==== DEBUG: targets 文件（前 200） ===="
+        find "$TARGETS_DIR" -maxdepth 3 -type f -print | head -n 200 || true
+
+        # 优先找两级目录：targets/<platform>/<subtarget>
+        FIRMWARE_DIR="$(find "$TARGETS_DIR" -mindepth 2 -maxdepth 2 -type d | head -n 1 || true)"
+
+        # 若没有两级目录，回退找一级目录：targets/<platform>
+        if [ -z "${FIRMWARE_DIR}" ]; then
+          echo "WARN: no 2-level target dir, fallback to 1-level"
+          FIRMWARE_DIR="$(find "$TARGETS_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
+        fi
+
+        if [ -z "${FIRMWARE_DIR}" ]; then
+          echo "ERROR: no target output dir found under $TARGETS_DIR"
+          exit 1
+        fi
+
         cd "${FIRMWARE_DIR}"
+
+        # 通常 targets/<...>/packages 是索引目录，不需要上传可删
         rm -rf packages || true
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "::set-output name=status::success"
+
+        echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 上传固件目录
       uses: actions/upload-artifact@main
