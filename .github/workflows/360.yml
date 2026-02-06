@@ -53,8 +53,8 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-    # 修复：submodule 使用 git@github.com: 需要 SSH key，会失败；强制改成 https
-    - name: 修复 GitHub SSH 子模块（强制走 HTTPS）
+    # （可留可不留）尝试把 ssh submodule 强制走 https
+    - name: Git 全局改用 HTTPS（避免 git@github.com 需要私钥）
       run: |
         set -eux
         git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -68,6 +68,16 @@ jobs:
         chmod +x "$DIY_P1_SH"
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P1_SH"
+
+    # ✅ 关键修复：直接禁用 modemfeed（否则它的 SSH 子模块会让 feeds update 失败）
+    - name: 禁用 modemfeed（避免 SSH 子模块报错）
+      run: |
+        set -eux
+        if [ -f openwrt/feeds.conf.default ]; then
+          sed -i '/modemfeed/d' openwrt/feeds.conf.default
+          echo "==== feeds.conf.default（已移除 modemfeed）===="
+          cat openwrt/feeds.conf.default
+        fi
 
     - name: 更新订阅源
       run: |
@@ -103,8 +113,6 @@ jobs:
         set -eux
         cd openwrt
         make defconfig
-
-        # 下载阶段并行拉满
         make download -j"$(nproc)"
         find dl -size -1024c -exec ls -l {} \; || true
         find dl -size -1024c -exec rm -f {} \; || true
@@ -114,11 +122,10 @@ jobs:
       run: |
         set -eux
         cd openwrt
-
         echo -e "$(nproc) 线程编译"
         export MAKEFLAGS="-j$(nproc)"
 
-        # 提速：直接 world 并行构建；失败再降级，避免误判 success
+        # 任意一次成功就继续，否则直接失败退出（避免后续找不到 bin/targets）
         if make world; then
           echo "build ok (world, parallel)"
         elif make -j2 world; then
@@ -153,20 +160,14 @@ jobs:
       if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
       run: |
         set -eux
-
-        # 自动寻找固件输出目录（避免硬编码 cd openwrt/bin/targets/*/* 失败）
         FIRMWARE_DIR="$(find openwrt -type d -path 'openwrt/bin/targets/*/*' | head -n 1 || true)"
-
         if [ -z "${FIRMWARE_DIR}" ]; then
           echo "ERROR: openwrt/bin/targets/*/* not found."
-          echo "Possible reasons: build failed OR output path differs."
-          echo "=== Debug: list openwrt/bin (if exists) ==="
           ls -la openwrt || true
           ls -la openwrt/bin || true
           find openwrt -maxdepth 4 -type d -print | head -n 200 || true
           exit 1
         fi
-
         cd "${FIRMWARE_DIR}"
         rm -rf packages || true
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
@@ -179,58 +180,12 @@ jobs:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
-    - name: 上传固件到奶牛快传
-      id: cowtransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
-      run: |
-        set -eux
-        curl -fsSL git.io/file-transfer | sh
-        ./transfer cow --block 2621440 -s -p 64 --no-progress "${FIRMWARE}" 2>&1 | tee cowtransfer.log
-        echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
-        echo "::set-output name=url::$(cat cowtransfer.log | grep https | cut -f3 -d" ")"
-
-    - name: 上传固件到WeTransfer
-      id: wetransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_WETRANSFER == 'true' && !cancelled()
-      run: |
-        set -eux
-        curl -fsSL git.io/file-transfer | sh
-        ./transfer wet -s -p 16 --no-progress "${FIRMWARE}" 2>&1 | tee wetransfer.log
-        echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
-        echo "::set-output name=url::$(cat wetransfer.log | grep https | cut -f3 -d" ")"
-
-    - name: 生成发布标签
-      id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      run: |
-        set -eux
-        echo "::set-output name=release_tag::$(date +"%Y.%m.%d-%H%M")"
-        touch release.txt
-        [ "$UPLOAD_COWTRANSFER" = true ] && echo "🔗 [奶牛快传](${{ steps.cowtransfer.outputs.url }})" >> release.txt
-        [ "$UPLOAD_WETRANSFER" = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
-        echo "::set-output name=status::success"
-
     - name: 上传固件到发布页面
       uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && steps.organize.outputs.status == 'success' && !cancelled()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
+        tag_name: ${{ env.FILE_DATE }}
+        body: "Automated build"
         files: ${{ env.FIRMWARE }}/*
-
-    - name: 清理历史工作流
-      uses: GitRML/delete-workflow-runs@main
-      with:
-        retain_days: 1
-        keep_minimum_runs: 3
-
-    - name: 移除旧版本发布
-      uses: dev-drprasad/delete-older-releases@v0.1.0
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-        keep_latest: 3
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
