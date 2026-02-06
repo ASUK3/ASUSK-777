@@ -53,6 +53,14 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+    # 修复：submodule 使用 git@github.com: 需要 SSH key，会失败；强制改成 https
+    - name: 修复 GitHub SSH 子模块（强制走 HTTPS）
+      run: |
+        set -eux
+        git config --global url."https://github.com/".insteadOf "git@github.com:"
+        git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+        git config --global url."https://github.com/".insteadOf "git://github.com/"
+
     - name: 加载自定义提要
       run: |
         set -eux
@@ -64,18 +72,19 @@ jobs:
     - name: 更新订阅源
       run: |
         set -eux
-        cd openwrt && ./scripts/feeds update -a
+        cd openwrt
+        ./scripts/feeds update -a
 
     - name: 安装订阅源
       run: |
         set -eux
-        cd openwrt && ./scripts/feeds install -a
+        cd openwrt
+        ./scripts/feeds install -a
 
     - name: 加载自定义配置
       run: |
         set -eux
         [ -e files ] && mv files openwrt/files
-        # CONFIG_FILE 名称包含括号时，务必加引号
         [ -e "$CONFIG_FILE" ] && mv "$CONFIG_FILE" openwrt/.config
         chmod +x "$DIY_P2_SH"
         cd openwrt
@@ -88,30 +97,36 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
-    - name: 下载依赖包
+    - name: 下载依赖包（并行加速）
       id: package
       run: |
         set -eux
         cd openwrt
         make defconfig
-        make download -j8
+
+        # 下载阶段并行拉满
+        make download -j"$(nproc)"
         find dl -size -1024c -exec ls -l {} \; || true
         find dl -size -1024c -exec rm -f {} \; || true
 
-    - name: 编译固件
+    - name: 编译固件（并行加速）
       id: compile
       run: |
         set -eux
         cd openwrt
-        echo -e "$(nproc) 线程编译"
 
-        # 任意一次成功就继续，否则直接失败退出
-        if make -j"$(nproc)"; then
-          echo "build ok (parallel)"
-        elif make -j1; then
-          echo "build ok (single)"
-        elif make -j1 V=s; then
-          echo "build ok (single, verbose)"
+        echo -e "$(nproc) 线程编译"
+        export MAKEFLAGS="-j$(nproc)"
+
+        # 提速：直接 world 并行构建；失败再降级，避免误判 success
+        if make world; then
+          echo "build ok (world, parallel)"
+        elif make -j2 world; then
+          echo "build ok (world, j2)"
+        elif make -j1 world; then
+          echo "build ok (world, single)"
+        elif make -j1 V=s world; then
+          echo "build ok (world, single verbose)"
         else
           echo "ERROR: build failed."
           exit 1
