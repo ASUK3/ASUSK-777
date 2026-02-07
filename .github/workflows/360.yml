@@ -25,31 +25,51 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: 检查代码
       uses: actions/checkout@main
 
-    - name: 初始化环境
+    - name: 初始化环境（强清理 + 依赖）
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         set -eux
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+        echo "==== Disk before cleanup ===="
+        df -hT || true
+
+        # 强清理：最大化释放 GitHub runner 空间
+        sudo rm -rf \
+          /usr/share/dotnet \
+          /usr/local/lib/android \
+          /opt/ghc \
+          /opt/hostedtoolcache \
+          /usr/local/share/boost \
+          /usr/share/swift \
+          /var/lib/apt/lists/* || true
+
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-2004)
+
+        # ccache（用于编译缓存）
+        sudo -E apt-get -qq install ccache
+
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
+
         sudo timedatectl set-timezone "$TZ"
+
         sudo mkdir -p /workdir
         sudo chown "$USER":"$GROUPS" /workdir
+
+        echo "==== Disk after cleanup ===="
+        df -hT || true
 
     - name: 克隆源代码
       working-directory: /workdir
       run: |
         set -eux
-        df -hT "$PWD"
         git clone "$REPO_URL" -b "$REPO_BRANCH" openwrt
         ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
@@ -60,10 +80,12 @@ jobs:
         git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
         git config --global url."https://github.com/".insteadOf "git://github.com/"
 
-    - name: 加载自定义提要
+    - name: 加载自定义提要 + 执行 diy-part1
       run: |
         set -eux
+        # feeds.conf.default 替换（如果仓库根目录有自带的 feeds.conf.default）
         [ -e "$FEEDS_CONF" ] && mv "$FEEDS_CONF" openwrt/feeds.conf.default
+
         chmod +x "$DIY_P1_SH"
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P1_SH"
@@ -89,11 +111,33 @@ jobs:
         cd openwrt
         ./scripts/feeds install -a
 
-    - name: 加载自定义配置
+    # ====== Cache：dl + ccache（强烈推荐）======
+    - name: 缓存 dl（下载包缓存）
+      uses: actions/cache@v4
+      with:
+        path: openwrt/dl
+        key: ${{ runner.os }}-openwrt-dl-${{ env.REPO_BRANCH }}-${{ hashFiles('openwrt/feeds.conf.default') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-dl-${{ env.REPO_BRANCH }}-
+          ${{ runner.os }}-openwrt-dl-
+
+    - name: 缓存 ccache（编译缓存）
+      uses: actions/cache@v4
+      with:
+        path: openwrt/.ccache
+        key: ${{ runner.os }}-openwrt-ccache-${{ env.REPO_BRANCH }}-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-ccache-${{ env.REPO_BRANCH }}-
+          ${{ runner.os }}-openwrt-ccache-
+
+    - name: 加载自定义配置 + 执行 diy-part2
       run: |
         set -eux
-        [ -e files ] && mv files openwrt/files
+        # 如果你的仓库根目录有 files/，移动到 openwrt/files
+        [ -d files ] && mv files openwrt/files || true
+
         [ -e "$CONFIG_FILE" ] && mv "$CONFIG_FILE" openwrt/.config
+
         chmod +x "$DIY_P2_SH"
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P2_SH"
@@ -110,20 +154,52 @@ jobs:
       run: |
         set -eux
         cd openwrt
+
+        # 开启 ccache
+        export CCACHE_DIR="$PWD/.ccache"
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        ccache -M 2G || true
+        ccache -s || true
+
         make defconfig
         make download -j"$(nproc)"
         find dl -size -1024c -exec ls -l {} \; || true
         find dl -size -1024c -exec rm -f {} \; || true
 
-    - name: 编译固件（并行加速）
+    - name: 编译固件（并行加速 + 失败自动吐日志）
       id: compile
       run: |
         set -eux
         cd openwrt
+
+        # 开启 ccache
+        export CCACHE_DIR="$PWD/.ccache"
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        ccache -M 2G || true
+
         echo -e "$(nproc) 线程编译"
         export MAKEFLAGS="-j$(nproc)"
 
-        # 任意一次成功就继续，否则直接失败退出
+        dump_opkg_logs() {
+          echo "=============================="
+          echo "==== DEBUG: disk / inode ===="
+          df -hT || true
+          df -ih || true
+          echo "=============================="
+          echo "==== DEBUG: opkg logs (tail) ===="
+          ls -ալ staging_dir/target-*/root-*/tmp 2>/dev/null || true
+          tail -n 220 staging_dir/target-*/root-*/tmp/opkg*.log 2>/dev/null || true
+          echo "=============================="
+          echo "==== DEBUG: search 'Collected errors' ===="
+          grep -R "Collected errors" -n staging_dir/target-*/root-*/tmp 2>/dev/null || true
+          echo "=============================="
+          echo "==== DEBUG: last install scripts (postinst) ===="
+          ls -al staging_dir/target-*/root-*/tmp/*.postinst 2>/dev/null | tail -n 50 || true
+          echo "=============================="
+        }
+
         if make world; then
           echo "build ok (world, parallel)"
         elif make -j2 world; then
@@ -133,13 +209,15 @@ jobs:
         elif make -j1 V=s world; then
           echo "build ok (world, single verbose)"
         else
-          echo "ERROR: build failed."
+          echo "ERROR: build failed. Dumping debug logs..."
+          dump_opkg_logs
           exit 1
         fi
 
+        ccache -s || true
+
         echo "status=success" >> "$GITHUB_OUTPUT"
 
-        # 取设备名（可选）
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME || true
         if [ -s DEVICE_NAME ]; then
           echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
@@ -180,10 +258,8 @@ jobs:
         echo "==== DEBUG: targets 文件（前 200） ===="
         find "$TARGETS_DIR" -maxdepth 3 -type f -print | head -n 200 || true
 
-        # 优先找两级目录：targets/<platform>/<subtarget>
+        # targets/<platform>/<subtarget>
         FIRMWARE_DIR="$(find "$TARGETS_DIR" -mindepth 2 -maxdepth 2 -type d | head -n 1 || true)"
-
-        # 若没有两级目录，回退找一级目录：targets/<platform>
         if [ -z "${FIRMWARE_DIR}" ]; then
           echo "WARN: no 2-level target dir, fallback to 1-level"
           FIRMWARE_DIR="$(find "$TARGETS_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
@@ -195,8 +271,6 @@ jobs:
         fi
 
         cd "${FIRMWARE_DIR}"
-
-        # 通常 targets/<...>/packages 是索引目录，不需要上传可删
         rm -rf packages || true
 
         echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
