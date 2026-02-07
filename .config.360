@@ -219,10 +219,9 @@ CONFIG_PACKAGE_kmod-tun=y
 # CONFIG_BUSYBOX_CONFIG_FEATURE_BLKID_TYPE is not set
 # CONFIG_BUSYBOX_CONFIG_VOLUMEID is not set
 
-# ==== 拥塞控制：保留 cubic（你原来就是 cubic） ====
+# ==== 强制 BBR：内核模块（你已有 bbr，这里建议补 fq） ====
 CONFIG_PACKAGE_kmod-tcp-bbr=y
-# CONFIG_PACKAGE_kmod-tcp-cubic is not set
-# CONFIG_PACKAGE_kmod-tcp-reno is not set
+CONFIG_PACKAGE_kmod-sched-fq=y
 
 # ==== crypto（保持你原来的；如要进一步瘦身可再裁） ====
 CONFIG_PACKAGE_kmod-crypto-acompress=y
@@ -351,18 +350,19 @@ CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 # CONFIG_PACKAGE_luci-app-traffic-status is not set
 # CONFIG_PACKAGE_luci-i18n-traffic-status-zh-cn is not set
 # ==== 瘦身：禁用流量统计/监控/过滤类 LuCI 插件（及常见配套） ====
+# ==== 瘦身：禁用 LuCI 监控/统计/过滤类插件（及常见配套） ====
 
-# nlbwmon（流量分析）
+# nlbwmon（主机/协议带宽统计）
 # CONFIG_PACKAGE_luci-app-nlbwmon is not set
 # CONFIG_PACKAGE_luci-i18n-nlbwmon-zh-cn is not set
 # CONFIG_PACKAGE_nlbwmon is not set
 
-# cshark（抓包/分析相关）
+# cshark（抓包/分析前端，部分源可能没有；写了不影响）
 # CONFIG_PACKAGE_luci-app-cshark is not set
 # CONFIG_PACKAGE_luci-i18n-cshark-zh-cn is not set
-# （如果你仓库里 cshark 依赖 tshark/wireshark 类，也一并别选）
+# CONFIG_PACKAGE_cshark is not set
 
-# appfilter（应用过滤/识别）
+# appfilter（应用过滤/识别，部分源可能没有）
 # CONFIG_PACKAGE_luci-app-appfilter is not set
 # CONFIG_PACKAGE_luci-i18n-appfilter-zh-cn is not set
 # CONFIG_PACKAGE_appfilter is not set
@@ -380,24 +380,3 @@ CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 # CONFIG_PACKAGE_luci-app-netdata is not set
 # CONFIG_PACKAGE_luci-i18n-netdata-zh-cn is not set
 # CONFIG_PACKAGE_netdata is not set
-
-# 可能的“相关插件”顺手也关掉（你如果没选过也无所谓）
-# （下列是常见监控/统计类，按需保留/删除这一段）
-# CONFIG_PACKAGE_luci-app-statistics is not set
-# CONFIG_PACKAGE_luci-i18n-statistics-zh-cn is not set
-# CONFIG_PACKAGE_collectd is not set
-# CONFIG_PACKAGE_luci-app-wrtbwmon is not set
-# CONFIG_PACKAGE_luci-i18n-wrtbwmon-zh-cn is not set
-
-
-# ==== 强制使用 BBR 拥塞控制（运行时生效，确保启用 bbr 模块） ====
-
-# 你已经启用了 bbr 模块：CONFIG_PACKAGE_kmod-tcp-bbr=y
-# 这里再补充 sysctl 配置文件，确保启动后强制走 bbr + fq
-CONFIG_PACKAGE_sysctl-bbr=y
-
-# ==== 强制 BBR 运行时配置的前置：内核模块 ====
-CONFIG_PACKAGE_kmod-tcp-bbr=y
-CONFIG_PACKAGE_kmod-sched-fq=y
-
-
