@@ -1,16 +1,56 @@
 #!/bin/bash
 #
-# Copyright (c) 2019-2020 P3TERX
-#
 # OpenWrt DIY script part 2 (After Update feeds)
 #
 
 set -euo pipefail
 
-# 兜底：feeds 更新后强制默认主题依赖 argonv3
-sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
+log()  { echo -e "\033[1;32m[DIY-2]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[DIY-2]\033[0m $*"; }
 
-# ===== TCP / 网络 / 内存 调度优化（强制生效：sysctl.d）=====
+# -----------------------------------------------------------------------------
+# 1) 自动选择可用的 LuCI 主题：优先 argonv3 -> argon -> bootstrap
+#    并把 luci 元包默认依赖替换成该主题（避免依赖不存在导致 package/install 255）
+# -----------------------------------------------------------------------------
+choose_theme() {
+  # 主题包名优先级
+  local candidates=("luci-theme-argonv3" "luci-theme-argon" "luci-theme-bootstrap")
+  local chosen="luci-theme-bootstrap"
+
+  for pkg in "${candidates[@]}"; do
+    if grep -R -n -m1 "define Package/${pkg}" feeds 2>/dev/null | head -n1 >/dev/null; then
+      chosen="$pkg"
+      break
+    fi
+    if [[ -d "package" ]] && grep -R -n -m1 "define Package/${pkg}" package 2>/dev/null | head -n1 >/dev/null; then
+      chosen="$pkg"
+      break
+    fi
+  done
+
+  echo "$chosen"
+}
+
+THEME_PKG="$(choose_theme)"
+log "Selected LuCI theme package: ${THEME_PKG}"
+
+# 替换 luci collection 默认主题依赖
+LUCICOL_MK="feeds/luci/collections/luci/Makefile"
+if [[ -f "$LUCICOL_MK" ]]; then
+  # 把 bootstrap 替换为选中的主题（如果选中的就是 bootstrap，就不替换）
+  if [[ "$THEME_PKG" != "luci-theme-bootstrap" ]]; then
+    sed -i "s/luci-theme-bootstrap/${THEME_PKG}/g" "$LUCICOL_MK" || true
+    log "Patched ${LUCICOL_MK}: luci-theme-bootstrap -> ${THEME_PKG}"
+  else
+    log "Keep default theme dependency: luci-theme-bootstrap"
+  fi
+else
+  warn "Not found: ${LUCICOL_MK} (skip theme dependency patch)"
+fi
+
+# -----------------------------------------------------------------------------
+# 2) TCP / 网络 / 内存 调度优化（sysctl.d，刷入固件，开机生效）
+# -----------------------------------------------------------------------------
 mkdir -p files/etc/sysctl.d
 
 cat > files/etc/sysctl.d/99-sysctl-tune.conf << 'EOF'
@@ -28,7 +68,7 @@ net.ipv4.tcp_max_syn_backlog=8192
 net.core.netdev_max_backlog=2048
 
 ############################################
-# Socket Buffer (memory-rich, low latency)
+# Socket Buffer
 ############################################
 net.core.rmem_default=131072
 net.core.wmem_default=131072
@@ -65,13 +105,13 @@ net.ipv4.tcp_keepalive_intvl=30
 net.ipv4.tcp_keepalive_probes=5
 
 ############################################
-# UDP (low-latency baseline)
+# UDP
 ############################################
 net.ipv4.udp_rmem_min=16384
 net.ipv4.udp_wmem_min=16384
 
 ############################################
-# Busy Poll (lowest latency, CPU trade-off)
+# Busy Poll (CPU trade-off)
 ############################################
 net.core.busy_read=50
 net.core.busy_poll=50
@@ -113,13 +153,25 @@ net.netfilter.nf_conntrack_tcp_timeout_time_wait=60
 net.netfilter.nf_conntrack_udp_timeout=60
 net.netfilter.nf_conntrack_udp_timeout_stream=300
 EOF
+log "Wrote sysctl tune: files/etc/sysctl.d/99-sysctl-tune.conf"
 
-# ===== 强制 LuCI 主题为 argonv3（首次启动写入 UCI，保证 100% 生效）=====
+# -----------------------------------------------------------------------------
+# 3) 强制 LuCI 主题（首次启动写入 UCI，保证 100% 生效）
+#    注意：根据选中的主题包名，自动写对应的 luci-static 路径
+# -----------------------------------------------------------------------------
 mkdir -p files/etc/uci-defaults
-cat > files/etc/uci-defaults/99-force-theme << 'EOF'
+
+# 主题目录名：luci-theme-xxx -> xxx
+THEME_DIR="${THEME_PKG#luci-theme-}"
+
+cat > files/etc/uci-defaults/99-force-theme << EOF
 #!/bin/sh
-uci set luci.main.mediaurlbase='/luci-static/argonv3'
-uci commit luci
+# Force LuCI theme on first boot
+uci -q set luci.main.mediaurlbase='/luci-static/${THEME_DIR}'
+uci -q commit luci
 exit 0
 EOF
 chmod +x files/etc/uci-defaults/99-force-theme
+log "Wrote uci-defaults theme force: /luci-static/${THEME_DIR}"
+
+log "diy-part2 done."
