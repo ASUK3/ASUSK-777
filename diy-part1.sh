@@ -38,12 +38,12 @@ sed -i 's/time.cloudflare.com/cn.ntp.org.cn/g'  package/base-files/files/bin/con
 sed -i 's/pool.ntp.org/cn.pool.ntp.org/g'  package/base-files/files/bin/config_generate
 
 # Tcp和内存调度优化
-echo 'net.core.default_qdisc = fq_codel' >>package/base-files/files/etc/sysctl.conf
+echo 'net.core.default_qdisc = fq' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.core.somaxconn = 4096' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_max_syn_backlog = 8192' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.netdev_max_backlog = 4096' >>package/base-files/files/etc/sysctl.conf
+echo 'net.core.netdev_max_backlog = 2048' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.core.rmem_default = 131072' >>package/base-files/files/etc/sysctl.conf
 echo 'net.core.wmem_default = 131072' >>package/base-files/files/etc/sysctl.conf
@@ -55,7 +55,7 @@ echo 'net.ipv4.tcp_wmem = 4096 131072 8388608' >>package/base-files/files/etc/sy
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.ip_local_port_range = 1024 65535' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_congestion_control = cubic' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_congestion_control = bbr' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_fastopen = 3' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
@@ -69,20 +69,19 @@ echo 'net.ipv4.tcp_limit_output_bytes = 131072' >>package/base-files/files/etc/s
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_autocorking = 0' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_notsent_lowat = 8192' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_notsent_lowat = 16384' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_tw_reuse = 1' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_max_tw_buckets = 262144' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_retries2 = 8' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_rto_min = 100' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_retries2 = 10' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_syn_retries = 2' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_synack_retries = 2' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_syn_retries = 3' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_synack_retries = 3' >>package/base-files/files/etc/sysctl.conf
+echo '' >>package/base-files/files/etc/sysctl.conf
+echo 'net.ipv4.tcp_rto_min = 200' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_ecn = 1' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_early_retrans = 1' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_keepalive_time = 300' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.tcp_keepalive_intvl = 30' >>package/base-files/files/etc/sysctl.conf
@@ -94,10 +93,6 @@ echo 'net.ipv4.udp_mem = 524288 1048576 2097152' >>package/base-files/files/etc/
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.core.busy_read = 50' >>package/base-files/files/etc/sysctl.conf
 echo 'net.core.busy_poll = 50' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_syncookies = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_rfc1337 = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_no_metrics_save = 1' >>package/base-files/files/etc/sysctl.conf
 echo '' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.conf.all.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
 echo 'net.ipv4.conf.default.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
