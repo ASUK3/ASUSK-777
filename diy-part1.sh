@@ -28,11 +28,8 @@ if [[ -f "$CFG_GEN" ]]; then
     "$CFG_GEN"
   log "Default LAN IP -> 192.168.6.1"
 
-  # 1.2 强制主机名 -> ASUSWRT（兼容 ImmortalWrt / OpenWrt）
-  sed -i \
-    -e "s/hostname='ImmortalWrt'/hostname='ASUSWRT'/g" \
-    -e "s/hostname='OpenWrt'/hostname='ASUSWRT'/g" \
-    "$CFG_GEN"
+  # 1.2 强制主机名 -> ASUSWRT（更稳：直接改 hostname 行，不依赖默认值）
+  sed -i -E "s/(hostname=)'[^']*'/\1'ASUSWRT'/g" "$CFG_GEN"
   log "Hostname -> ASUSWRT"
 
   # 1.3 时区：CST-8 + Asia/Shanghai
