@@ -9,35 +9,44 @@ log()  { echo -e "\033[1;32m[DIY-2]\033[0m $*"; }
 warn() { echo -e "\033[1;33m[DIY-2]\033[0m $*"; }
 
 # -----------------------------------------------------------------------------
-# 1) 自动选择可用的 LuCI 主题：优先 argonv3 -> argon -> bootstrap
-#    并把 luci 元包默认依赖替换成该主题（避免依赖不存在导致 package/install 255）
+# 工具：往 .config 里“强制启用”某个包（不存在则跳过，不会把编译搞炸）
 # -----------------------------------------------------------------------------
-choose_theme() {
-  # 主题包名优先级
+enable_pkg_if_exists() {
+  local pkg="$1"
+  # feeds / package 里只要存在其 Makefile 定义就认为可用
+  if grep -R -n -m1 "define Package/${pkg}" feeds package 2>/dev/null | head -n1 >/dev/null; then
+    # 先移除可能存在的 is not set 行，避免冲突
+    sed -i "/^# CONFIG_PACKAGE_${pkg}=is not set$/d" .config 2>/dev/null || true
+    echo "CONFIG_PACKAGE_${pkg}=y" >> .config
+    log "Enable package: ${pkg}"
+    return 0
+  else
+    warn "Package not found (skip): ${pkg}"
+    return 1
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# 1) 自动选择可用的 LuCI 主题：argonv3 -> argon -> bootstrap
+# -----------------------------------------------------------------------------
+choose_theme_pkg() {
   local candidates=("luci-theme-argonv3" "luci-theme-argon" "luci-theme-bootstrap")
   local chosen="luci-theme-bootstrap"
-
   for pkg in "${candidates[@]}"; do
-    if grep -R -n -m1 "define Package/${pkg}" feeds 2>/dev/null | head -n1 >/dev/null; then
-      chosen="$pkg"
-      break
-    fi
-    if [[ -d "package" ]] && grep -R -n -m1 "define Package/${pkg}" package 2>/dev/null | head -n1 >/dev/null; then
+    if grep -R -n -m1 "define Package/${pkg}" feeds package 2>/dev/null | head -n1 >/dev/null; then
       chosen="$pkg"
       break
     fi
   done
-
   echo "$chosen"
 }
 
-THEME_PKG="$(choose_theme)"
+THEME_PKG="$(choose_theme_pkg)"
 log "Selected LuCI theme package: ${THEME_PKG}"
 
 # 替换 luci collection 默认主题依赖
 LUCICOL_MK="feeds/luci/collections/luci/Makefile"
 if [[ -f "$LUCICOL_MK" ]]; then
-  # 把 bootstrap 替换为选中的主题（如果选中的就是 bootstrap，就不替换）
   if [[ "$THEME_PKG" != "luci-theme-bootstrap" ]]; then
     sed -i "s/luci-theme-bootstrap/${THEME_PKG}/g" "$LUCICOL_MK" || true
     log "Patched ${LUCICOL_MK}: luci-theme-bootstrap -> ${THEME_PKG}"
@@ -49,7 +58,28 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 2) TCP / 网络 / 内存 调度优化（sysctl.d，刷入固件，开机生效）
+# 2) 强制把中文语言包、TurboACC 中文包加入固件（避免“只编译没打进镜像”）
+#    重点：TurboACC MTK 对应 i18n 包通常是 luci-i18n-turboacc-mtk-zh-cn
+# -----------------------------------------------------------------------------
+# 先确保基础中文（很多页面翻译依赖它）
+enable_pkg_if_exists "luci-i18n-base-zh-cn" || true
+enable_pkg_if_exists "luci-i18n-opkg-zh-cn" || true
+enable_pkg_if_exists "luci-i18n-firewall-zh-cn" || true
+
+# TurboACC：优先 mtk 版本中文包，其次尝试非 mtk 名字（防不同源码树）
+if ! enable_pkg_if_exists "luci-i18n-turboacc-mtk-zh-cn"; then
+  enable_pkg_if_exists "luci-i18n-turboacc-zh-cn" || true
+fi
+
+# 主题本体也最好写进 .config（即便 Makefile 替换依赖，这里再兜底）
+enable_pkg_if_exists "${THEME_PKG}" || true
+
+# 让 .config 生效（重要：把上面 echo 的配置转成最终依赖）
+make defconfig >/dev/null 2>&1 || true
+log "make defconfig done (best-effort)"
+
+# -----------------------------------------------------------------------------
+# 3) TCP / 网络 / 内存 调度优化（sysctl.d，刷入固件，开机生效）
 # -----------------------------------------------------------------------------
 mkdir -p files/etc/sysctl.d
 
@@ -156,22 +186,27 @@ EOF
 log "Wrote sysctl tune: files/etc/sysctl.d/99-sysctl-tune.conf"
 
 # -----------------------------------------------------------------------------
-# 3) 强制 LuCI 主题（首次启动写入 UCI，保证 100% 生效）
-#    注意：根据选中的主题包名，自动写对应的 luci-static 路径
+# 4) 首次启动：强制 LuCI 主题 + 强制 LuCI 语言为中文（解决 TurboACC 仍英文）
 # -----------------------------------------------------------------------------
 mkdir -p files/etc/uci-defaults
 
-# 主题目录名：luci-theme-xxx -> xxx
 THEME_DIR="${THEME_PKG#luci-theme-}"
 
-cat > files/etc/uci-defaults/99-force-theme << EOF
+cat > files/etc/uci-defaults/99-luci-init << EOF
 #!/bin/sh
-# Force LuCI theme on first boot
+# Force LuCI theme + language on first boot
+
+# 主题
 uci -q set luci.main.mediaurlbase='/luci-static/${THEME_DIR}'
+
+# 语言：强制 zh_cn（不靠浏览器 Accept-Language）
+uci -q set luci.main.lang='zh_cn'
+
 uci -q commit luci
 exit 0
 EOF
-chmod +x files/etc/uci-defaults/99-force-theme
-log "Wrote uci-defaults theme force: /luci-static/${THEME_DIR}"
+
+chmod +x files/etc/uci-defaults/99-luci-init
+log "Wrote uci-defaults: theme=/luci-static/${THEME_DIR}, lang=zh_cn"
 
 log "diy-part2 done."
