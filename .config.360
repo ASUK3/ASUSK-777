@@ -396,3 +396,8 @@ CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 # 这里再补充 sysctl 配置文件，确保启动后强制走 bbr + fq
 CONFIG_PACKAGE_sysctl-bbr=y
 
+# ==== 强制 BBR 运行时配置的前置：内核模块 ====
+CONFIG_PACKAGE_kmod-tcp-bbr=y
+CONFIG_PACKAGE_kmod-sched-fq=y
+
+
