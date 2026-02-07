@@ -1,21 +1,15 @@
 #!/bin/bash
 #
-# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
+# Copyright (c) 2019-2020 P3TERX
 #
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part2.sh
-# Description: OpenWrt DIY script part 2 (After Update feeds)
+# OpenWrt DIY script part 2 (After Update feeds)
 #
 
 set -euo pipefail
 
 # ===== TCP / 网络 / 内存 调度优化（强制生效：sysctl.d）=====
-# 说明：
-# - OpenWrt/ImmortalWrt 会在启动时加载 /etc/sysctl.d/*.conf
-# - 用一个文件统一管理，避免重复、冲突、顺序不确定
+# - 启动时由 /etc/sysctl.d/*.conf 自动加载
+# - 单文件统一管理，避免重复/顺序问题
 
 mkdir -p files/etc/sysctl.d
 
@@ -34,13 +28,12 @@ net.ipv4.tcp_max_syn_backlog=8192
 net.core.netdev_max_backlog=2048
 
 ############################################
-# Socket Buffer
+# Socket Buffer (memory-rich, low latency)
 ############################################
 net.core.rmem_default=131072
 net.core.wmem_default=131072
 net.core.rmem_max=8388608
 net.core.wmem_max=8388608
-
 net.ipv4.tcp_rmem=4096 131072 8388608
 net.ipv4.tcp_wmem=4096 131072 8388608
 
@@ -48,10 +41,9 @@ net.ipv4.tcp_wmem=4096 131072 8388608
 # TCP Behavior
 ############################################
 net.ipv4.ip_local_port_range=1024 65535
-net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_fastopen=1
 net.ipv4.tcp_timestamps=1
 net.ipv4.tcp_sack=1
-net.ipv4.tcp_fack=1
 net.ipv4.tcp_slow_start_after_idle=0
 net.ipv4.tcp_mtu_probing=1
 net.ipv4.tcp_limit_output_bytes=131072
@@ -73,14 +65,13 @@ net.ipv4.tcp_keepalive_intvl=30
 net.ipv4.tcp_keepalive_probes=5
 
 ############################################
-# UDP
+# UDP (low-latency baseline)
 ############################################
 net.ipv4.udp_rmem_min=16384
 net.ipv4.udp_wmem_min=16384
-net.ipv4.udp_mem=524288 1048576 2097152
 
 ############################################
-# Busy Poll (低延迟/高CPU占用，保守值)
+# Busy Poll (lowest latency, CPU trade-off)
 ############################################
 net.core.busy_read=50
 net.core.busy_poll=50
@@ -92,14 +83,13 @@ net.ipv4.conf.all.accept_redirects=0
 net.ipv4.conf.default.accept_redirects=0
 net.ipv6.conf.all.accept_redirects=0
 net.ipv6.conf.default.accept_redirects=0
-
 net.ipv4.conf.all.accept_source_route=0
 net.ipv4.conf.default.accept_source_route=0
 net.ipv6.conf.all.accept_source_route=0
 net.ipv6.conf.default.accept_source_route=0
 
 ############################################
-# IPv6 (保持开启，但关闭 RA / autoconf，适合路由器做网关)
+# IPv6 (gateway mode)
 ############################################
 net.ipv6.conf.all.disable_ipv6=0
 net.ipv6.conf.default.disable_ipv6=0
@@ -115,7 +105,7 @@ net.ipv6.neigh.default.gc_thresh2=4096
 net.ipv6.neigh.default.gc_thresh3=8192
 
 ############################################
-# Conntrack (大连接数场景)
+# Conntrack
 ############################################
 net.netfilter.nf_conntrack_max=262144
 net.netfilter.nf_conntrack_tcp_timeout_established=86400
