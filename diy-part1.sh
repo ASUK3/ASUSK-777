@@ -63,4 +63,7 @@ if [[ -f "$LUCICOL_MK" ]]; then
   sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/g' "$LUCICOL_MK" || true
   log "Force LuCI default theme: luci-theme-argonv3"
 else
-  warn "Not found: $LU
+  warn "Not found: $LUCICOL_MK (feeds not updated yet). Recommend repeating this in diy-part2.sh."
+fi
+
+log "diy-part1 done."
