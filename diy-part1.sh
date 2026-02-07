@@ -12,125 +12,55 @@
 
 # Uncomment a feed source
 #sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
+#!/bin/bash
+# OpenWrt DIY script part 1 (Before Update feeds)
 
-# name: 替换默认主题 luci-theme-argon
-sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/' feeds/luci/collections/luci/Makefile
+set -euo pipefail
 
-# Add a feed source
-#echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
-#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
-#定时任务软件源
-#git clone https://github.com/sirpdboy/luci-app-autotimeset package/luci-app-autotimeset
+log()  { echo -e "\033[1;32m[DIY-1]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[DIY-1]\033[0m $*"; }
 
-# 默认ip 192.168.6.1
-sed -i 's/192.168.[0-9]\{1,3\}.1/192.168.6.1/g' package/base-files/files/bin/config_generate
+# 1) 强制默认主题：luci collection 里把 bootstrap 替换成 argonv3
+LUCICOL_MK="feeds/luci/collections/luci/Makefile"
+if [[ -f "$LUCICOL_MK" ]]; then
+  sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/g' "$LUCICOL_MK" || true
+  log "Force LuCI default theme: luci-theme-argonv3"
+else
+  warn "Not found: $LUCICOL_MK (feeds not prepared yet?)"
+fi
 
-# 修改时区 UTF-8
-sed -i 's/UTC/CST-8/g'  package/base-files/files/bin/config_generate
+# 2) 强制默认 IP / 主机名 / 时区 / NTP（编译时默认）
+CFG_GEN="package/base-files/files/bin/config_generate"
+if [[ -f "$CFG_GEN" ]]; then
+  # 2.1 默认 IP：只改匹配到的默认值（避免误伤其它文本）
+  sed -i \
+    -e 's/ipaddr:-"192\.168\.[0-9]\{1,3\}\.1"/ipaddr:-"192.168.6.1"/g' \
+    -e 's/"192\.168\.[0-9]\{1,3\}\.1"/"192.168.6.1"/g' \
+    "$CFG_GEN"
+  log "Default LAN IP -> 192.168.6.1"
 
-# 修改主机名 OP
-sed -i 's/ImmortalWrt/ASUSWRT/g'  package/base-files/files/bin/config_generate
+  # 2.2 主机名：强制 ASUSWRT（只替换 hostname 行更稳）
+  sed -i "s/hostname='ImmortalWrt'/hostname='ASUSWRT'/g" "$CFG_GEN"
+  log "Hostname -> ASUSWRT"
 
-# 时区
-sed -i 's/time1.apple.com/time1.cloud.tencent.com/g'  package/base-files/files/bin/config_generate
-sed -i 's/time1.google.com/ntp.aliyun.com/g'  package/base-files/files/bin/config_generate
-sed -i 's/time.cloudflare.com/cn.ntp.org.cn/g'  package/base-files/files/bin/config_generate
-sed -i 's/pool.ntp.org/cn.pool.ntp.org/g'  package/base-files/files/bin/config_generate
+  # 2.3 时区：CST-8 + Asia/Shanghai（LuCI 显示更规范）
+  sed -i \
+    -e "s/timezone='UTC'/timezone='CST-8'/g" \
+    -e "s/zonename='UTC'/zonename='Asia\\/Shanghai'/g" \
+    "$CFG_GEN"
+  log "Timezone -> CST-8 / Asia/Shanghai"
 
-# Tcp和内存调度优化
-echo 'net.core.default_qdisc = fq' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.somaxconn = 4096' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_max_syn_backlog = 8192' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.netdev_max_backlog = 2048' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.rmem_default = 131072' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.wmem_default = 131072' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.rmem_max = 8388608' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.wmem_max = 8388608' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_rmem = 4096 131072 8388608' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_wmem = 4096 131072 8388608' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.ip_local_port_range = 1024 65535' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_congestion_control = bbr' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_fastopen = 3' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_timestamps = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_sack = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_fack = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_slow_start_after_idle = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_mtu_probing = 1' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_limit_output_bytes = 131072' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_autocorking = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_notsent_lowat = 16384' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_tw_reuse = 1' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_max_tw_buckets = 262144' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_retries2 = 10' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_syn_retries = 3' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_synack_retries = 3' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_rto_min = 200' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_ecn = 1' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_keepalive_time = 300' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_keepalive_intvl = 30' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.tcp_keepalive_probes = 5' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.udp_rmem_min = 16384' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.udp_wmem_min = 16384' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.udp_mem = 524288 1048576 2097152' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.busy_read = 50' >>package/base-files/files/etc/sysctl.conf
-echo 'net.core.busy_poll = 50' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.conf.all.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.conf.default.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.accept_redirects = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.conf.all.accept_source_route = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.conf.default.accept_source_route = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.accept_source_route = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.accept_source_route = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv4.ip_no_pmtu_disc = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.disable_ipv6 = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.disable_ipv6 = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.accept_ra = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.accept_ra = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.autoconf = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.autoconf = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.all.use_tempaddr = 0' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.conf.default.use_tempaddr = 0' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.neigh.default.gc_thresh1 = 1024' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.neigh.default.gc_thresh2 = 4096' >>package/base-files/files/etc/sysctl.conf
-echo 'net.ipv6.neigh.default.gc_thresh3 = 8192' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_max = 262144' >>package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_tcp_timeout_established = 86400' >>package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_tcp_timeout_time_wait = 60' >>package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_udp_timeout = 60' >>package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_udp_timeout_stream = 300' >>package/base-files/files/etc/sysctl.conf
-echo '' >>package/base-files/files/etc/sysctl.conf
+  # 2.4 NTP：替换成国内更快、更稳的一组（多源容错）
+  # 说明：真正“最快”取决于你网络/运营商/地区，最实用是放多台国内优质 NTP，让系统自己选可用/低延迟的。
+  # 常见默认写法两种：openwrt.pool 或 pool.ntp.org，这里都兼容替换。
+  sed -i \
+    -e "s/server='0\\.openwrt\\.pool\\.ntp\\.org 1\\.openwrt\\.pool\\.ntp\\.org 2\\.openwrt\\.pool\\.ntp\\.org 3\\.openwrt\\.pool\\.ntp\\.org'/server='ntp.aliyun.com time1.cloud.tencent.com ntp.tuna.tsinghua.edu.cn ntp.ntsc.ac.cn cn.pool.ntp.org'/g" \
+    -e "s/server='0\\.pool\\.ntp\\.org 1\\.pool\\.ntp\\.org 2\\.pool\\.ntp\\.org 3\\.pool\\.ntp\\.org'/server='ntp.aliyun.com time1.cloud.tencent.com ntp.tuna.tsinghua.edu.cn ntp.ntsc.ac.cn cn.pool.ntp.org'/g" \
+    -e "s/pool\\.ntp\\.org/cn\\.pool\\.ntp\\.org/g" \
+    "$CFG_GEN" || true
+  log "NTP -> Aliyun / Tencent / TUNA / NTSC / cn.pool"
+else
+  warn "Not found: $CFG_GEN (skip config_generate edits)"
+fi
 
-# 替换源 
-# sed -i 's,mirrors.vsean.net/openwrt,mirrors.pku.edu.cn/immortalwrt,g'  package/emortal/default-settings/files/99-default-settings-chinese
-
-# Do not be evil # ae6ff34105444482cc3d46d43987cc467ea79ac7
-# LANG=C sed -i ':label;N;s/^[\x81-\xFE][\x40-\xFE].*\n//g' target/linux/mediatek/files-5.4/arch/arm64/boot/dts/mediatek/mt7981-h3c-nx30pro.dts
-# cat target/linux/mediatek/files-5.4/arch/arm64/boot/dts/mediatek/mt7981-h3c-nx30pro.dts
+log "diy-part1 done."
