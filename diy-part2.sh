@@ -4,14 +4,13 @@
 #
 # OpenWrt DIY script part 2 (After Update feeds)
 #
-sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/g' feeds/luci/collections/luci/Makefile || true
 
 set -euo pipefail
 
-# ===== TCP / 网络 / 内存 调度优化（强制生效：sysctl.d）=====
-# - 启动时由 /etc/sysctl.d/*.conf 自动加载
-# - 单文件统一管理，避免重复/顺序问题
+# 兜底：feeds 更新后强制默认主题依赖 argonv3
+sed -i 's/luci-theme-bootstrap/luci-theme-argonv3/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 
+# ===== TCP / 网络 / 内存 调度优化（强制生效：sysctl.d）=====
 mkdir -p files/etc/sysctl.d
 
 cat > files/etc/sysctl.d/99-sysctl-tune.conf << 'EOF'
@@ -114,3 +113,13 @@ net.netfilter.nf_conntrack_tcp_timeout_time_wait=60
 net.netfilter.nf_conntrack_udp_timeout=60
 net.netfilter.nf_conntrack_udp_timeout_stream=300
 EOF
+
+# ===== 强制 LuCI 主题为 argonv3（首次启动写入 UCI，保证 100% 生效）=====
+mkdir -p files/etc/uci-defaults
+cat > files/etc/uci-defaults/99-force-theme << 'EOF'
+#!/bin/sh
+uci set luci.main.mediaurlbase='/luci-static/argonv3'
+uci commit luci
+exit 0
+EOF
+chmod +x files/etc/uci-defaults/99-force-theme
