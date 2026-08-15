@@ -1,4 +1,4 @@
-name: 360 OpenWrt 固件自动编译
+name: 360 6.6 OpenWrt 固件自动编译
 
 on:
   # 仓库触发事件（可通过 API 远程触发）
