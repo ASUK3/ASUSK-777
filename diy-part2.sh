@@ -155,4 +155,39 @@ grep "CONFIG_PACKAGE_luci-i18n.*zh-cn=y" .config 2>/dev/null | sed 's/^/  /' || 
 log "自定义 files 目录结构:"
 find files -type f 2>/dev/null | sort | sed 's/^/  /' || warn "files 目录为空或不存在"
 
+# ============================================================
+# 修复：启用 datconf 和 datconf-lua，确保依赖链完整
+# ============================================================
+log ">>> 启用 datconf / datconf-lua，确保 mtwifi-cfg 依赖完整"
+
+# 从 .config 中清除旧的禁用配置
+sed -i '/^# CONFIG_PACKAGE_datconf/d' .config 2>/dev/null || true
+sed -i '/^# CONFIG_PACKAGE_datconf-lua/d' .config 2>/dev/null || true
+sed -i '/^CONFIG_PACKAGE_datconf=/d' .config 2>/dev/null || true
+sed -i '/^CONFIG_PACKAGE_datconf-lua=/d' .config 2>/dev/null || true
+
+# 强制启用 datconf 和 datconf-lua
+enable_pkg_if_exists "datconf"
+enable_pkg_if_exists "datconf-lua"
+
+# ============================================================
+# 彻底删除 radicale3 插件目录 → 警告永不再出现
+# ============================================================
+log ">>> 删除有问题的 radicale3 插件，消除警告"
+rm -rf feeds/luci/applications/luci-app-radicale3 2>/dev/null || true
+rm -rf package/feeds/luci-app-radicale3 2>/dev/null || true
+
+# 确认删除
+if [ ! -d "feeds/luci/applications/luci-app-radicale3" ]; then
+  log "✅ luci-app-radicale3 已删除，警告彻底消除！"
+fi
+
+# ============================================================
+# 保留 mtwifi-cfg / luci-app-mtk（不删除）
+# 因为 datconf 已启用，依赖链完整，不会再报警告
+# ============================================================
+log "✅ 保留 mtwifi-cfg / luci-app-mtk，datconf 依赖已修复"
+
+exit 0
+
 exit 0
