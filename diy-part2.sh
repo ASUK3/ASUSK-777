@@ -71,44 +71,6 @@ if [[ ! -d "feeds" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 1) 启用中文语言包
-# -----------------------------------------------------------------------------
-log "========================================"
-log ">>> 步骤 1：启用中文语言包"
-log "========================================"
-
-# 基础中文包（必备）
-enable_pkg_if_exists "luci-i18n-base-zh-cn" || true
-enable_pkg_if_exists "luci-i18n-opkg-zh-cn" || true
-enable_pkg_if_exists "luci-i18n-firewall-zh-cn" || true
-
-# TurboACC(mtk) 中文包
-enable_pkg_if_exists "luci-i18n-turboacc-mtk-zh-cn" || true
-# 兼容普通版 TurboACC
-enable_pkg_if_exists "luci-i18n-turboacc-zh-cn" || true
-
-# 自动重启中文包
-enable_pkg_if_exists "luci-i18n-autoreboot-zh-cn" || true
-
-# 其他常用中文包（可选，按需取消注释启用）
-# enable_pkg_if_exists "luci-i18n-upnp-zh-cn" || true
-# enable_pkg_if_exists "luci-i18n-ddns-zh-cn" || true
-# enable_pkg_if_exists "luci-i18n-openvpn-zh-cn" || true
-# enable_pkg_if_exists "luci-i18n-wireguard-zh-cn" || true
-# enable_pkg_if_exists "luci-i18n-samba4-zh-cn" || true
-# enable_pkg_if_exists "luci-i18n-minidlna-zh-cn" || true
-
-# -----------------------------------------------------------------------------
-# 收敛配置（让依赖关系自动展开）
-# -----------------------------------------------------------------------------
-log ">>> 执行 make defconfig 收敛配置..."
-if make defconfig >/dev/null 2>&1; then
-  log "✓ make defconfig 执行成功"
-else
-  warn "make defconfig 执行失败（非致命错误，继续执行）"
-fi
-
-# -----------------------------------------------------------------------------
 # 2) 关键修复：首次启动强制 LuCI 中文 + 清理缓存
 #    解决 TurboACC 等插件明明有中文包却显示英文的问题
 # -----------------------------------------------------------------------------
