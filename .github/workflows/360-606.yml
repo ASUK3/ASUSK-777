@@ -32,8 +32,8 @@ env:
   UPLOAD_FIRMWARE: true                # 是否上传固件到Artifacts
   UPLOAD_RELEASE: true                 # 是否上传到GitHub Release（需打tag触发）
   # 源码配置（修改为你自己的OpenWrt源码地址）
-  OPENWRT_REPO: https://github.com/openwrt/openwrt.git
-  OPENWRT_BRANCH: main                 # 源码分支
+  OPENWRT_REPO: https://github.com/ASUK3/immortalwrt-mt798x-6.6
+  OPENWRT_BRANCH: openwrt-24.10-6.6
 
 jobs:
   build:
