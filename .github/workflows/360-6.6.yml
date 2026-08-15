@@ -13,7 +13,7 @@ on:
 
 # 全局环境变量配置
 env:
-  # 源码仓库地址（已更新为 ASUK3 的 6.6 内核版本）
+  # 源码仓库地址（ASUK3 的 6.6 内核版本）
   REPO_URL: https://github.com/ASUK3/immortalwrt-mt798x-6.6
   # 源码分支（openwrt-24.10 + 内核 6.6）
   REPO_BRANCH: openwrt-24.10-6.6
@@ -51,9 +51,10 @@ jobs:
       uses: actions/checkout@main
 
     # ============================================================
-    # 步骤 2：初始化编译环境（强清理 + 安装依赖 + 性能优化）
+    # 步骤 2：初始化编译环境（强清理 + 安装依赖）
+    # 注意：这里不再提前创建 openwrt 目录，避免 git clone 失败
     # ============================================================
-    - name: ② 初始化编译环境（清理空间 + 安装依赖 + 性能调优）
+    - name: ② 初始化编译环境（清理空间 + 安装依赖）
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -97,16 +98,9 @@ jobs:
         # 设置时区
         sudo timedatectl set-timezone "$TZ"
         
-        # 创建工作目录并设置权限
+        # 只创建 /workdir 父目录，不创建 openwrt 子目录
         sudo mkdir -p /workdir
         sudo chown "$USER":"$GROUPS" /workdir
-        
-        # ========== 性能优化：tmpfs 内存挂载 ==========
-        # 将 dl 下载目录和 ccache 挂载到 tmpfs（内存），大幅提升 I/O 速度
-        sudo mkdir -p /workdir/openwrt/dl
-        sudo mkdir -p /workdir/openwrt/.ccache
-        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/dl
-        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/.ccache
         
         echo "==== 清理后磁盘空间 ===="
         df -hT || true
@@ -128,6 +122,32 @@ jobs:
         
         # 创建软链接方便后续操作
         ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+
+    # ============================================================
+    # 步骤 3.5：挂载 tmpfs 内存文件系统（关键修复！）
+    # 必须在克隆源码之后、恢复缓存之前执行
+    # 将 dl 和 .ccache 挂载到内存，大幅提升 I/O 速度
+    # ============================================================
+    - name: ③.⑤ 挂载 tmpfs 内存加速
+      run: |
+        set -eux
+        
+        # 在克隆后的 openwrt 目录中创建 dl 和 .ccache 目录（如果不存在）
+        mkdir -p /workdir/openwrt/dl
+        mkdir -p /workdir/openwrt/.ccache
+        
+        # 挂载 tmpfs 到 dl 目录（4G 内存）
+        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/dl
+        
+        # 挂载 tmpfs 到 .ccache 目录（4G 内存）
+        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/.ccache
+        
+        # 设置权限
+        sudo chown "$USER":"$GROUPS" /workdir/openwrt/dl
+        sudo chown "$USER":"$GROUPS" /workdir/openwrt/.ccache
+        
+        echo "==== tmpfs 挂载情况 ===="
+        df -hT | grep -E "tmpfs|Filesystem" || true
 
     # ============================================================
     # 步骤 4：Git 全局配置（强制使用 HTTPS 协议）
@@ -192,6 +212,7 @@ jobs:
 
     # ============================================================
     # 步骤 9：缓存 dl 下载目录（避免重复下载源码包）
+    # 注意：缓存会恢复到 tmpfs（内存）中，速度极快
     # ============================================================
     - name: ⑨ 缓存下载包目录（加速重复编译）
       uses: actions/cache@v4
@@ -204,6 +225,7 @@ jobs:
 
     # ============================================================
     # 步骤 10：缓存 ccache 编译缓存（核心加速手段）
+    # 注意：缓存会恢复到 tmpfs（内存）中，速度极快
     # ============================================================
     - name: ⑩ 缓存 ccache 编译缓存（核心加速）
       uses: actions/cache@v4
@@ -316,10 +338,6 @@ jobs:
         }
         
         # ========== 智能降级编译策略 ==========
-        # 1. 首先尝试最大并行度编译
-        # 2. 失败则降级为 2 线程
-        # 3. 再失败则单线程编译
-        # 4. 最后尝试单线程详细输出模式
         if make world; then
           echo "编译成功（最大并行度）"
         elif make -j2 world; then
