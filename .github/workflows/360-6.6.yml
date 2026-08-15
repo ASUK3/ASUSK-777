@@ -267,6 +267,15 @@ jobs:
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P2_SH"
 
+
+- name: ⑪.⑤ 双保险：直接禁用 datconf
+  run: |
+    set -eux
+    cd openwrt
+    sed -i 's/^CONFIG_PACKAGE_datconf=y$/# CONFIG_PACKAGE_datconf is not set/' .config 2>/dev/null || true
+    sed -i 's/^CONFIG_PACKAGE_luci-app-datconf=y$/# CONFIG_PACKAGE_luci-app-datconf is not set/' .config 2>/dev/null || true
+    grep datconf .config || echo "datconf 已确认禁用"
+    
     # ============================================================
     # 步骤 12：SSH 远程连接调试（可选）
     # ============================================================
