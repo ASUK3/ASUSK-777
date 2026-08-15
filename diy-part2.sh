@@ -184,5 +184,14 @@ rm -rf package/feeds/luci-app-radicale3 2>/dev/null || true
 if [ ! -d "feeds/luci/applications/luci-app-radicale3" ]; then
   log "✅ luci-app-radicale3 已删除，警告彻底消除！"
 fi
+# ============================================================
+# 【最终补刀】把依赖 datconf 的两个也一起删！永不再报错！
+# ============================================================
+rm -rf package/mtk/applications/mtwifi-cfg 2>/dev/null || true
+rm -rf feeds/luci/applications/luci-app-mtk 2>/dev/null || true
+rm -rf package/feeds/mtk/applications/mtwifi-cfg 2>/dev/null || true
+rm -rf package/feeds/luci/applications/luci-app-mtk 2>/dev/null || true
+
+log "✅ mtwifi-cfg / luci-app-mtk 已删除，依赖链彻底切断！"
 
 exit 0
