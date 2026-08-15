@@ -14,7 +14,7 @@ on:
 # 全局环境变量配置
 env:
   # 源码仓库地址（ASUK3 的 6.6 内核版本）
-  REPO_URL: https://github.com/ASUK3/immortalwrt-mt798x-6.6
+  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
   # 源码分支（openwrt-24.10 + 内核 6.6）
   REPO_BRANCH: openwrt-24.10-6.6
   # 订阅源配置文件
