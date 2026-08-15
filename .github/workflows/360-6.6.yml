@@ -20,7 +20,7 @@ env:
   # 订阅源配置文件
   FEEDS_CONF: feeds.conf.default
   # 编译配置文件
-  CONFIG_FILE: .config.360
+  CONFIG_FILE: .config
   # 自定义脚本 1（更新 feeds 前执行）
   DIY_P1_SH: diy-part1.sh
   # 自定义脚本 2（更新 feeds 后执行）
