@@ -194,15 +194,21 @@ log "自定义 files 目录结构:"
 find files -type f 2>/dev/null | sort | sed 's/^/  /' || warn "files 目录为空或不存在"
 
 # ============================================================
-# 临时修复：禁用编译失败的 datconf 包
+# 彻底修复：datconf 源码缺失导致编译失败 → 强制彻底禁用
 # ============================================================
-log ">>> 临时修复：禁用 datconf 包"
+log ">>> 强制彻底禁用 datconf 包（源码缺失导致编译失败）"
 
-# 注释掉 datconf 相关配置
-sed -i 's/^CONFIG_PACKAGE_datconf=y$/# CONFIG_PACKAGE_datconf is not set/' .config 2>/dev/null || true
-sed -i 's/^CONFIG_PACKAGE_luci-app-datconf=y$/# CONFIG_PACKAGE_luci-app-datconf is not set/' .config 2>/dev/null || true
+# 1. 直接在 .config 里强制设为不选中（双保险写法）
+sed -i '/CONFIG_PACKAGE_datconf/d' .config 2>/dev/null || true
+sed -i '/CONFIG_PACKAGE_luci-app-datconf/d' .config 2>/dev/null || true
+echo "# CONFIG_PACKAGE_datconf is not set" >> .config
+echo "# CONFIG_PACKAGE_luci-app-datconf is not set" >> .config
 
-# 验证结果
-log "datconf 配置处理结果："
-grep -E "datconf" .config || log "  ✓ datconf 已禁用/未启用"
+# 2. 再次收敛配置，确保不被回写
+make defconfig >/dev/null 2>&1 || true
+
+# 3. 最终验证
+log "datconf 最终配置状态："
+grep -E "datconf" .config || log "  ✓ datconf 已彻底禁用，无相关配置"
+
 exit 0
