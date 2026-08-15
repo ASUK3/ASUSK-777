@@ -156,25 +156,33 @@ log "自定义 files 目录结构:"
 find files -type f 2>/dev/null | sort | sed 's/^/  /' || warn "files 目录为空或不存在"
 
 # ============================================================
-# 【精准修复】彻底禁用 datconf（源码缺失导致编译失败）
+# 【终极必杀】直接删除 datconf 源码目录 → 彻底不可能编译
 # ============================================================
-log ">>> 彻底禁用 datconf 包"
+log ">>> 【终极】删除 datconf 源码目录，彻底禁用"
+rm -rf package/mtk/applications/datconf
+rm -rf feeds/packages/mtk/applications/datconf 2>/dev/null || true
+rm -rf package/feeds/mtk/applications/datconf 2>/dev/null || true
 
-# 第1重：删干净所有相关配置
-sed -i '/CONFIG_PACKAGE_datconf/d' .config 2>/dev/null || true
-
-# 第2重：强制写死为禁用
-echo "# CONFIG_PACKAGE_datconf is not set" >> .config
-echo "# CONFIG_PACKAGE_datconf-lua is not set" >> .config
-
-# 第3重：收敛后再确认锁死
-make defconfig >/dev/null 2>&1 || true
+# 再清配置
 sed -i '/CONFIG_PACKAGE_datconf/d' .config 2>/dev/null || true
 echo "# CONFIG_PACKAGE_datconf is not set" >> .config
 echo "# CONFIG_PACKAGE_datconf-lua is not set" >> .config
 
-# 验证
-log "datconf 最终状态："
-grep -E "datconf" .config || log "  ✅ datconf / datconf-lua 已彻底禁用"
+# 确认删除
+if [ ! -d "package/mtk/applications/datconf" ]; then
+  log "✅ datconf 源码目录已删除，永不再编译！"
+fi
+
+# ============================================================
+# 彻底删除 radicale3 插件目录 → 警告永不再出现
+# ============================================================
+log ">>> 删除有问题的 radicale3 插件，消除警告"
+rm -rf feeds/luci/applications/luci-app-radicale3 2>/dev/null || true
+rm -rf package/feeds/luci-app-radicale3 2>/dev/null || true
+
+# 确认删除
+if [ ! -d "feeds/luci/applications/luci-app-radicale3" ]; then
+  log "✅ luci-app-radicale3 已删除，警告彻底消除！"
+fi
 
 exit 0
