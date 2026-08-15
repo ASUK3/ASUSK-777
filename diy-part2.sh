@@ -193,4 +193,16 @@ grep "CONFIG_PACKAGE_luci-i18n.*zh-cn=y" .config 2>/dev/null | sed 's/^/  /' || 
 log "自定义 files 目录结构:"
 find files -type f 2>/dev/null | sort | sed 's/^/  /' || warn "files 目录为空或不存在"
 
+# ============================================================
+# 临时修复：禁用编译失败的 datconf 包
+# ============================================================
+log ">>> 临时修复：禁用 datconf 包"
+
+# 注释掉 datconf 相关配置
+sed -i 's/^CONFIG_PACKAGE_datconf=y$/# CONFIG_PACKAGE_datconf is not set/' .config 2>/dev/null || true
+sed -i 's/^CONFIG_PACKAGE_luci-app-datconf=y$/# CONFIG_PACKAGE_luci-app-datconf is not set/' .config 2>/dev/null || true
+
+# 验证结果
+log "datconf 配置处理结果："
+grep -E "datconf" .config || log "  ✓ datconf 已禁用/未启用"
 exit 0
