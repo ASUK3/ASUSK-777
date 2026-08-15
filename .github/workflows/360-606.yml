@@ -78,16 +78,16 @@ jobs:
           cd $OPENWRT_COMPILE_DIR
           echo "✅ 源码克隆完成，分支：$(git rev-parse --abbrev-ref HEAD)，提交：$(git rev-parse --short HEAD)"
 
-      # ==============================================
-      # ③.⑤ 挂载tmpfs内存加速（根据Runner内存调整大小）
-      # ==============================================
-      - name: ③.⑤ 挂载tmpfs内存加速
-        run: |
-          # GitHub免费Runner为4核16G内存，此处分配10G给build_dir、4G给staging_dir
-          sudo mount -t tmpfs -o size=10G tmpfs $OPENWRT_COMPILE_DIR/build_dir
-          sudo mount -t tmpfs -o size=4G tmpfs $OPENWRT_COMPILE_DIR/staging_dir
-          echo "✅ tmpfs挂载完成"
-          df -h | grep -E 'build_dir|staging_dir'
+     - name: ③.⑤ 挂载tmpfs内存加速
+  run: |
+    # 先创建挂载点目录（解决目录不存在的问题）
+    mkdir -p $OPENWRT_COMPILE_DIR/build_dir
+    mkdir -p $OPENWRT_COMPILE_DIR/staging_dir
+    # GitHub免费Runner为4核16G内存，此处分配10G给build_dir、4G给staging_dir
+    sudo mount -t tmpfs -o size=10G tmpfs $OPENWRT_COMPILE_DIR/build_dir
+    sudo mount -t tmpfs -o size=4G tmpfs $OPENWRT_COMPILE_DIR/staging_dir
+    echo "✅ tmpfs挂载完成"
+    df -h | grep -E 'build_dir|staging_dir'
 
       # ==============================================
       # ④ Git协议配置（避免SSH子模块错误）
