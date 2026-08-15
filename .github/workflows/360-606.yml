@@ -1,23 +1,25 @@
-name: OpenWrt 固件自动编译
+name: 360 OpenWrt 固件自动编译
 
 on:
-  repository_dispatch:
+  # 仅保留手动触发
   workflow_dispatch:
     inputs:
       ssh:
         description: '启用SSH远程调试（true/false）'
         required: false
         default: 'false'
-  push:
-    branches:
-      - main
-    paths:
-      - '.config'
-      - 'feeds.conf.default'
-      - 'diy-part*.sh'
-      - '.github/workflows/*.yml'
-  schedule:
-    - cron: '0 0 * * 0'  # 每周日0点自动编译（可按需修改）
+  # 注释掉下面的自动触发规则
+  # repository_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - '.config'
+  #     - 'feeds.conf.default'
+  #     - 'diy-part*.sh'
+  #     - '.github/workflows/*.yml'
+  # schedule:
+  #   - cron: '0 0 * * 0'
 
 env:
   # 基础配置（按需修改）
