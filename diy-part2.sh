@@ -1,23 +1,34 @@
 #!/bin/bash
 #
 # OpenWrt DIY script part 2 (更新 feeds 后执行)
-# 功能：启用中文语言包、强制 LuCI 中文显示、其他自定义配置
+# 功能：启用中文语言包、强制 LuCI 中文显示、自定义 Banner
 #
 
 # 不使用 set -euo pipefail，避免命令未匹配时意外退出
 # 改用手动错误处理，更稳健
 
-log()  { echo -e "\033[1;32m[DIY-2]\033[0m $*"; }
-warn() { echo -e "\033[1;33m[DIY-2 警告]\033[0m $*"; }
-err()  { echo -e "\033[1;31m[DIY-2 错误]\033[0m $*"; }
+# 使用 function 关键字定义函数，兼容性更好（避免 CRLF 格式问题）
+function log() {
+  echo -e "\033[1;32m[DIY-2]\033[0m $*"
+}
+
+function warn() {
+  echo -e "\033[1;33m[DIY-2 警告]\033[0m $*"
+}
+
+function err() {
+  echo -e "\033[1;31m[DIY-2 错误]\033[0m $*"
+}
 
 # -----------------------------------------------------------------------------
 # 工具函数：检查包是否存在于 feeds 或 package 中
 # -----------------------------------------------------------------------------
-check_pkg_exists() {
+function check_pkg_exists() {
   local pkg="$1"
-  # 在 feeds 和 package 目录中查找包定义
-  if grep -R -l "define Package/${pkg}\b" feeds/ package/ 2>/dev/null | grep -q Makefile; then
+  # 只搜索 Makefile 文件，使用 -E 扩展正则，兼容性更好
+  if grep -R -l -E --include="Makefile" \
+    "define Package/${pkg}([^A-Za-z0-9_-]|$)" \
+    feeds/ package/ 2>/dev/null | head -n1 | grep -q .; then
     return 0
   else
     return 1
@@ -28,7 +39,7 @@ check_pkg_exists() {
 # 工具函数：如果包存在则强制启用（写入 .config）
 # 作用：避免 make defconfig 收敛掉用户手动选择的包
 # -----------------------------------------------------------------------------
-enable_pkg_if_exists() {
+function enable_pkg_if_exists() {
   local pkg="$1"
   
   if check_pkg_exists "${pkg}"; then
@@ -79,7 +90,7 @@ enable_pkg_if_exists "luci-i18n-turboacc-zh-cn" || true
 # 自动重启中文包
 enable_pkg_if_exists "luci-i18n-autoreboot-zh-cn" || true
 
-# 其他常用中文包（可选，按需启用）
+# 其他常用中文包（可选，按需取消注释启用）
 # enable_pkg_if_exists "luci-i18n-upnp-zh-cn" || true
 # enable_pkg_if_exists "luci-i18n-ddns-zh-cn" || true
 # enable_pkg_if_exists "luci-i18n-openvpn-zh-cn" || true
@@ -108,7 +119,7 @@ log "========================================"
 # 创建 uci-defaults 目录
 mkdir -p files/etc/uci-defaults
 
-# 写入强制中文脚本
+# 写入强制中文脚本（单引号包裹 UCI_EOF，内容原样写入）
 cat > files/etc/uci-defaults/99-force-luci-zhcn << 'UCI_EOF'
 #!/bin/sh
 # =============================================================================
@@ -122,10 +133,6 @@ uci -q commit luci
 
 # 清理 LuCI 缓存，确保语言设置立即生效
 rm -rf /tmp/luci-* /tmp/luci-indexcache 2>/dev/null
-
-# 可选：设置系统语言环境
-# export LANG=zh_CN.UTF-8
-# export LC_ALL=zh_CN.UTF-8
 
 exit 0
 UCI_EOF
@@ -142,15 +149,16 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 3) 可选：其他自定义配置
+# 3) 自定义 Banner 登录欢迎页
 # -----------------------------------------------------------------------------
 log "========================================"
-log ">>> 步骤 3：其他自定义配置"
+log ">>> 步骤 3：自定义 Banner 登录欢迎页"
 log "========================================"
 
-# 示例：创建自定义 banner（可选）
 mkdir -p files/etc
-cat > files/etc/banner << 'BANNER_EOF'
+
+# 注意：BANNER_EOF 不加引号，让 $(date +%Y%m%d) 可以展开为实际编译日期
+cat > files/etc/banner << BANNER_EOF
  █████╗ ███████╗██╗   ██╗███████╗██╗    ██╗██████╗ ████████╗
 ██╔══██╗██╔════╝██║   ██║██╔════╝██║    ██║██╔══██╗╚══██╔══╝
 ███████║███████╗██║   ██║███████╗██║ █╗ ██║██████╔╝   ██║   
@@ -161,10 +169,14 @@ cat > files/etc/banner << 'BANNER_EOF'
 ImmortalWrt 24.10 | Kernel 6.6 | Build: $(date +%Y%m%d)
 -----------------------------------------------------
 BANNER_EOF
-# log "✓ 已写入自定义 banner"
 
-# 示例：修改 root 密码（可选，不推荐硬编码）
-# 如需设置密码，建议在首次启动后通过 LuCI 或 passwd 命令设置
+if [[ -f "files/etc/banner" ]]; then
+  log "✓ 已写入自定义 banner"
+  log "  内容预览:"
+  cat files/etc/banner | sed 's/^/    /'
+else
+  warn "写入 banner 失败"
+fi
 
 # -----------------------------------------------------------------------------
 # 完成
