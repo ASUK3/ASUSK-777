@@ -155,43 +155,4 @@ grep "CONFIG_PACKAGE_luci-i18n.*zh-cn=y" .config 2>/dev/null | sed 's/^/  /' || 
 log "自定义 files 目录结构:"
 find files -type f 2>/dev/null | sort | sed 's/^/  /' || warn "files 目录为空或不存在"
 
-# ============================================================
-# 【终极必杀】直接删除 datconf 源码目录 → 彻底不可能编译
-# ============================================================
-log ">>> 【终极】删除 datconf 源码目录，彻底禁用"
-rm -rf package/mtk/applications/datconf
-rm -rf feeds/packages/mtk/applications/datconf 2>/dev/null || true
-rm -rf package/feeds/mtk/applications/datconf 2>/dev/null || true
-
-# 再清配置
-sed -i '/CONFIG_PACKAGE_datconf/d' .config 2>/dev/null || true
-echo "# CONFIG_PACKAGE_datconf is not set" >> .config
-echo "# CONFIG_PACKAGE_datconf-lua is not set" >> .config
-
-# 确认删除
-if [ ! -d "package/mtk/applications/datconf" ]; then
-  log "✅ datconf 源码目录已删除，永不再编译！"
-fi
-
-# ============================================================
-# 彻底删除 radicale3 插件目录 → 警告永不再出现
-# ============================================================
-log ">>> 删除有问题的 radicale3 插件，消除警告"
-rm -rf feeds/luci/applications/luci-app-radicale3 2>/dev/null || true
-rm -rf package/feeds/luci-app-radicale3 2>/dev/null || true
-
-# 确认删除
-if [ ! -d "feeds/luci/applications/luci-app-radicale3" ]; then
-  log "✅ luci-app-radicale3 已删除，警告彻底消除！"
-fi
-# ============================================================
-# 【最终补刀】把依赖 datconf 的两个也一起删！永不再报错！
-# ============================================================
-# rm -rf package/mtk/applications/mtwifi-cfg 2>/dev/null || true
-# rm -rf feeds/luci/applications/luci-app-mtk 2>/dev/null || true
-# rm -rf package/feeds/mtk/applications/mtwifi-cfg 2>/dev/null || true
-# rm -rf package/feeds/luci/applications/luci-app-mtk 2>/dev/null || true
-
-log "✅ mtwifi-cfg / luci-app-mtk 已删除，依赖链彻底切断！"
-
 exit 0
