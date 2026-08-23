@@ -124,29 +124,23 @@ jobs:
         ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
     # ============================================================
-    # 步骤 3.5：挂载 tmpfs 内存文件系统
+    # 步骤 3.5：准备缓存目录（使用 Runner 磁盘，不使用 tmpfs）
     # 必须在克隆源码之后、恢复缓存之前执行
     # ============================================================
-    - name: ③.⑤ 挂载 tmpfs 内存加速
+    - name: ③.⑤ 准备编译缓存目录（磁盘模式）
       run: |
         set -eux
         
-        # 在克隆后的 openwrt 目录中创建 dl 和 .ccache 目录
+        # 创建 dl 和 .ccache 目录，直接使用 GitHub Runner 磁盘空间
         mkdir -p /workdir/openwrt/dl
         mkdir -p /workdir/openwrt/.ccache
         
-        # 挂载 tmpfs 到 dl 目录（4G 内存）
-        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/dl
-        
-        # 挂载 tmpfs 到 .ccache 目录（4G 内存）
-        sudo mount -t tmpfs -o size=4G tmpfs /workdir/openwrt/.ccache
-        
         # 设置权限
-        sudo chown "$USER":"$GROUPS" /workdir/openwrt/dl
-        sudo chown "$USER":"$GROUPS" /workdir/openwrt/.ccache
+        sudo chown -R "$USER":"$GROUPS" /workdir/openwrt/dl
+        sudo chown -R "$USER":"$GROUPS" /workdir/openwrt/.ccache
         
-        echo "==== tmpfs 挂载情况 ===="
-        df -hT | grep -E "tmpfs|Filesystem" || true
+        echo "==== 缓存目录磁盘空间 ===="
+        df -hT /workdir/openwrt/dl /workdir/openwrt/.ccache || true
 
     # ============================================================
     # 步骤 4：Git 全局配置（强制使用 HTTPS 协议）
@@ -226,7 +220,7 @@ jobs:
 
     # ============================================================
     # 步骤 9：缓存 dl 下载目录（避免重复下载源码包）
-    # 缓存会恢复到 tmpfs（内存）中，速度极快
+    # 缓存直接恢复到 Runner 磁盘中
     # ============================================================
     - name: ⑨ 缓存下载包目录（加速重复编译）
       uses: actions/cache@v4
@@ -239,7 +233,7 @@ jobs:
 
     # ============================================================
     # 步骤 10：缓存 ccache 编译缓存（核心加速手段）
-    # 缓存会恢复到 tmpfs（内存）中，速度极快
+    # 缓存直接恢复到 Runner 磁盘中
     # ============================================================
     - name: ⑩ 缓存 ccache 编译缓存（核心加速）
       uses: actions/cache@v4
@@ -292,8 +286,8 @@ jobs:
         export CC="ccache gcc"
         export CXX="ccache g++"
         
-        # 设置 ccache 最大缓存为 4G
-        ccache -M 4G || true
+        # 设置 ccache 最大缓存为 2G
+        ccache -M 2G || true
         
         # 显示 ccache 当前状态
         ccache -s || true
@@ -322,8 +316,8 @@ jobs:
         export CC="ccache gcc"
         export CXX="ccache g++"
         
-        # 设置 ccache 最大缓存为 4G
-        ccache -M 4G || true
+        # 设置 ccache 最大缓存为 2G
+        ccache -M 2G || true
         
         # ========== 智能并行度控制 ==========
         # CPU 核心数 + 1 作为并行任务数（比单纯 nproc 更高效）
